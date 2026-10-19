@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Masuk — StarterLab</title>
+    <meta name="theme-color" content="#14283F">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preload" href="fonts/inter-400.woff" as="font" type="font/woff" crossorigin>
+    <link rel="preload" href="fonts/inter-700.woff" as="font" type="font/woff" crossorigin>
+    <link rel="stylesheet" href="style.css">
+    <script src="theme.js"></script>
+</head>
+<body class="auth-body auth-split-body">
+    <button type="button" class="theme-toggle theme-toggle-float" data-theme-toggle aria-pressed="false" title="Beralih tema" aria-label="Ganti tema terang/gelap"><svg class="ico-moon" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg><svg class="ico-sun" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+    <div class="auth-split">
+        <aside class="auth-hero" aria-hidden="false">
+            <div class="auth-hero-inner">
+                <div class="auth-hero-brand">
+                    <svg aria-hidden="true" focusable="false" width="36" height="36" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 1.6"/><path d="M17.5 5.5 10 17h5l-1.5 9.5L22 14.5h-5z" fill="currentColor"/></svg>
+                    <span>StarterLab</span>
+                </div>
+                <p class="auth-hero-tagline">Pahami. Ukur. Diagnosis.</p>
+                <h2 class="auth-hero-title">Laboratorium virtual sistem starter kendaraan</h2>
+                <p class="auth-hero-lead">Media belajar interaktif untuk memahami cara kerja sistem starter secara visual dan bertahap. Berlatih mengoperasikan, mengukur, dan mendiagnosis kerusakan dengan aman, tanpa risiko pada kendaraan sesungguhnya.</p>
+                <ol class="auth-steps">
+                    <li><b>Lihat</b><span>Jelajahi komponen di 3D Lab</span></li>
+                    <li><b>Operasikan</b><span>Jalankan simulator rangkaian</span></li>
+                    <li><b>Ukur</b><span>Gunakan multimeter virtual</span></li>
+                    <li><b>Diagnosis</b><span>Temukan penyebab kerusakan</span></li>
+                </ol>
+                <div class="auth-parts" aria-hidden="true">
+                    <img src="images/aki.webp" alt="" width="378" height="348" loading="lazy" decoding="async">
+                    <img src="images/relay.webp" alt="" width="267" height="420" loading="lazy" decoding="async">
+                    <img src="images/selenoid.webp" alt="" width="599" height="300" loading="lazy" decoding="async">
+                    <img src="images/motor-starter.webp" alt="" width="346" height="344" loading="lazy" decoding="async">
+                </div>
+            </div>
+        </aside>
+        <main class="auth-main">
+            <h1 class="sr-only">Masuk ke StarterLab</h1>
+            <div id="au-login" data-portal="general"></div>
+        </main>
+    </div>
+    <script src="config.js"></script>
+    <script src="cloud.js"></script>
+    <script src="instructorPlatform.js"></script>
+    <script src="progressApi.js"></script>
+    <script src="authUI.js"></script>
+</body>
+</html>

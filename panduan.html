@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panduan Teknis — StarterLab</title>
+    <meta name="theme-color" content="#14283F">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preload" href="fonts/inter-400.woff" as="font" type="font/woff" crossorigin>
+    <link rel="preload" href="fonts/inter-700.woff" as="font" type="font/woff" crossorigin>
+<style>
+    @font-face { font-family: 'Inter Local'; font-weight: 400; font-display: swap; src: url('fonts/inter-400.woff') format('woff'); }
+    @font-face { font-family: 'Inter Local'; font-weight: 600; font-display: swap; src: url('fonts/inter-600.woff') format('woff'); }
+    @font-face { font-family: 'Inter Local'; font-weight: 700; font-display: swap; src: url('fonts/inter-700.woff') format('woff'); }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: 'Inter Local', 'Segoe UI', Arial, sans-serif;
+        background: #0e1420; color: #e8eef6; padding: 24px; line-height: 1.6;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    h1 { font-size: 22px; color: #7fd1ff; margin-bottom: 4px; }
+    h2 { font-size: 15px; color: #ffcf7f; margin: 18px 0 8px; }
+    .sub { color: #9fb2c8; font-size: 13px; margin-bottom: 18px; }
+    .card {
+        background: #16202e; border: 1px solid #2a3a52; border-radius: 8px;
+        padding: 16px; margin-bottom: 14px;
+    }
+    label { display: block; font-size: 13px; color: #c7d6e8; margin-bottom: 6px; }
+    textarea {
+        width: 100%; min-height: 54px; background: #0c1220; color: #dff0ff;
+        border: 1px solid #31445f; border-radius: 6px; padding: 10px;
+        font-family: Consolas, monospace; font-size: 12px; resize: vertical;
+    }
+    input[type=text] {
+        width: 100%; background: #0c1220; color: #dff0ff; border: 1px solid #31445f;
+        border-radius: 6px; padding: 9px; font-family: Consolas, monospace; font-size: 12px;
+    }
+    button {
+        background: #1f8fd6; color: #fff; border: 0; border-radius: 6px;
+        padding: 10px 18px; font-size: 13px; cursor: pointer; margin-top: 10px;
+    }
+    button:hover { background: #2aa4ee; }
+    button.alt { background: #3a4a63; }
+    button.alt:hover { background: #4b5f80; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .row > div { flex: 1; min-width: 220px; }
+    pre {
+        background: #0c1220; border: 1px solid #31445f; border-radius: 6px;
+        padding: 12px; font-family: Consolas, monospace; font-size: 12px;
+        white-space: pre-wrap; word-break: break-word; color: #c9f2a8;
+        max-height: 420px; overflow: auto;
+    }
+    .etalase { color: #8ad3ff; font-size: 12px; margin-bottom: 8px; }
+    .guide-item {
+        border-bottom: 1px dashed #2a3a52; padding: 8px 2px;
+    }
+    .guide-item b { color: #ffcf7f; }
+    .code { background:#0c1220; color:#c9f2a8; padding:2px 6px; border-radius:4px; font-family:Consolas,monospace; font-size:12px; }
+    .err { color: #ff9b9b; font-size: 13px; }
+    .ok { color: #9bff9b; font-size: 13px; }
+    .note { font-size: 12px; color: #ffd9a0; font-style: italic; }
+    .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pill {
+        background: #1c2838; border: 1px solid #32465f; color: #c7d6e8;
+        border-radius: 20px; padding: 4px 12px; font-size: 12px; cursor: pointer;
+    }
+    .pill.active { background: #1f8fd6; color: #fff; }
+</style>
+    <script>
+        /* GERBANG LOGIN: halaman simulator tidak tampil sebelum login.
+           Sesi hanya berlaku di tab ini (sessionStorage) sehingga membuka link baru selalu meminta login. */
+        (function () {
+            var d = document.documentElement;
+            d.style.visibility = 'hidden';
+            var ok = false;
+            try {
+                var raw = sessionStorage.getItem('starterSim_auth_session_v1');
+                var s = raw ? JSON.parse(raw) : null;
+                ok = !!(s && s.userId);
+            } catch (e) { ok = false; }
+            if (ok) { d.style.visibility = ''; }
+            else { location.replace('login.html'); }
+        })();
+    </script>
+    <noscript><style>html{visibility:visible!important}</style><meta http-equiv="refresh" content="0;url=login.html"></noscript>
+</head>
+<body>
+<div class="wrap">
+    <h1>MENU PANDUAN - SIMULATOR STARTER</h1>
+    <div class="sub">Platform StarterLab (deterministik: tanpa Math.random, panggilan ulang identik, RBAC). STEP 8-24, A40-48.</div>
+
+    <div class="pills" id="pills"></div>
+
+    <div class="card">
+        <div class="row">
+            <div>
+                <label>Aktor (klik pill di atas untuk mengisi otomatis):</label>
+                <textarea id="actorInput">{&quot;id&quot;:&quot;U3&quot;,&quot;role&quot;:&quot;STUDENT&quot;}</textarea>
+            </div>
+            <div>
+                <label>Contoh actor presisi (STUDENT U3 / INSTRUCTOR U2 / ADMIN U1 / GUEST):</label>
+                <div class="code">{"id":"U3","role":"STUDENT"}<br>{"id":"U2","role":"INSTRUCTOR"}<br>{"id":"U1","role":"ADMIN"}</div>
+            </div>
+        </div>
+        <button id="btnBuka">BUKA MENU PANDUAN</button>
+        <button class="alt" id="btnSalin">SALIN PERINTAH RUN</button>
+    </div>
+
+    <div id="status" class="ok">Server siap. Klik &quot;BUKA MENU PANDUAN&quot; untuk mengambil panduan dari API.</div>
+
+    <h2>PANDUAN CARA MENJALANKAN SIMULATOR (dari API, RBAC A46)</h2>
+    <div class="card" id="hasil"><pre>Belum ada hasil. Klik tombol di atas.</pre></div>
+
+    <h2>CATATAN ETIS</h2>
+    <div class="card" id="etis" class="note">Simulator DETERMINISTIK: memakai data belajar NYATA siswa dari platform
+        (assignment, rubric, grading, portofolio, outcome attainment). Menu panduan memandu cara MENJALANKAN simulator;
+        BUKAN ujian kesabaran, BUKAN vonis terhadap pribadi siswa (A48).</div>
+
+    <h2>TENTANG</h2>
+    <div class="card" class="note">Dibuat oleh <strong>Wahyudin</strong> sebagai Tugas Karya Inovasi Pendidikan dalam Mata Kuliah Seminar Pendidikan Profesi Guru.</div>
+</div>
+
+<script>
+'use strict';
+var serverBase = location.origin; /* http://127.0.0.1:8088 saat diakses dari server ini */
+
+var actors = [
+    { label: 'STUDENT U3', value: { id: 'U3', role: 'STUDENT' } },
+    { label: 'INSTRUCTOR U2', value: { id: 'U2', role: 'INSTRUCTOR' } },
+    { label: 'ADMIN U1', value: { id: 'U1', role: 'ADMIN' } },
+    { label: 'GUEST', value: null }
+];
+
+function renderPills() {
+    var box = document.getElementById('pills');
+    box.innerHTML = '';
+    actors.forEach(function (a) {
+        var b = document.createElement('span');
+        b.className = 'pill';
+        b.textContent = a.label;
+        b.onclick = function () {
+            document.getElementById('actorInput').value = a.value ? JSON.stringify(a.value) : 'null';
+        };
+        box.appendChild(b);
+    });
+}
+
+function parseActor() {
+    var raw = document.getElementById('actorInput').value.trim();
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
+function setStatus(msg, ok) {
+    var s = document.getElementById('status');
+    s.className = ok ? 'ok' : 'err';
+    s.textContent = msg;
+}
+
+function bufur(actor) {
+    return JSON.stringify({ actor: actor });
+}
+
+function renderPanduan(result) {
+    var el = document.getElementById('hasil');
+    if (!result || !result.success) {
+        var err = (result && result.error) || {};
+        el.innerHTML = '<div class="err">GAGAL: ' + (err.code || 'ERROR') + ' - ' + (err.message || '') + '</div>';
+        return;
+    }
+    var d = result.data || {};
+    var items = (d.sparse && d.sparse) || [];
+    var html = '<div class="etalase">' + (d.RBAC || '') + ' | maxGuideItems=' + (d.maxGuideItems || 0) + '</div>';
+    html += '<div class="guide-item"><b>Cara MENJALANKAN seluruh suite (deterministik):</b> ' +
+        '<span class="code">node test/instructorPlatform.test.js</span></div>';
+    items.forEach(function (g, i) {
+        html += '<div class="guide-item">' + (i + 1) + '. <b>' + (g.judul || g.title || g.guide || '') + '</b><br>' +
+            '<span class="code">' + (g.cmd || g.perintah || '') + '</span></div>';
+    });
+    html += '<div class="note">' + ((d.catatanEthicalNote && d.catatanEthicalNote.data) || (d.note && d.note.data) || '') + '</div>';
+    el.innerHTML = html;
+
+    var etis = document.getElementById('etis');
+    etis.textContent = 'panduan: ' + ((d.note && d.note.data && JSON.stringify(d.note.data)) || '');
+}
+
+function salinPerintah() {
+    var target = document.createElement('textarea');
+    target.value = 'node test/instructorPlatform.test.js';
+    document.body.appendChild(target);
+    target.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(target);
+    setStatus('Perintah RUN disalin ke clipboard.', true);
+}
+
+document.getElementById('btnBuka').onclick = function () {
+    var actor = parseActor();
+    setStatus('Memuat panduan...', true);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', serverBase + '/api/panduan', true);
+    xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) return;
+        try {
+            var parsed = JSON.parse(xhr.responseText);
+            renderPanduan(parsed);
+            setStatus((xhr.status === 200 ? 'OK' : 'HTTP ' + xhr.status) + ' - ' + (parsed.success ? 'panduan dimuat.' : 'ditolak (RBAC).'), parsed.success);
+        } catch (e) {
+            setStatus('Respons tidak valid: ' + e.message, false);
+        }
+    };
+    xhr.send(bufur(actor));
+};
+
+document.getElementById('btnSalin').onclick = salinPerintah;
+renderPills();
+</script>
+</body>
+</html>
