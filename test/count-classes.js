@@ -1,0 +1,11 @@
+const fs = require('fs');
+const h = fs.readFileSync(process.argv[2], 'utf8');
+const count = (re) => (h.match(re) || []).length;
+console.log('status-row:', count(/class="status-row/g));
+console.log('positive-wire:', count(/class="wire positive-wire/g));
+console.log('thick-wire:', count(/class="wire thick-wire/g));
+console.log('ground-wire:', count(/class="wire ground-wire/g));
+console.log('component clickable:', count(/class="component clickable/g));
+console.log('fault-check:', count(/class="fault-check/g));
+console.log('ignition-position:', count(/class="ignition-position/g));
+console.log('particle-seg:', count(/class="particle-seg/g));
