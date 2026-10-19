@@ -1,0 +1,36 @@
+PHASE 8 — STEP 22: CLOUD SYNC & DETERMINISTIC RETRY (§34-36)
+
+RINGKASAN (melanjutkan // STEP 17 SINKRONISASI & ANTREAN // + // STEP 18 CLOUD API ABSTRACTION //
+yang SUDAH ada dan SEMUA DETERMINISTIK, tanpa Math.random):
+STEP 22 menutup siklus sinkronisasi cloud: perubahan OFFLINE yang sudah diantrekan
+(syncQueueRepository, STEP 17) di-PUSH ke cloud lewat apiClient (STEP 18) DENGAN
+strategi retry yang DETERMINISTIK — bukan tebakan acak. Status sinkronisasi
+dapat dilihat hanya oleh pemilik data / instruktur kelasnya / ADMIN (RBAC A34).
+
+WAJIB 4 seam deterministik (komposisi pada syam yang SUDAH TERBUKTI di instructorPlatform.js):
+  1. Phase8.cloudSyncService.syncWithRetry(queueItemId, actorOpts)
+       membaca barang antrean NYATA dari syncQueueRepository (bukan karangan);
+       memakai apiClient (POST /sync) dengan backoff DETERMINISTIK
+       (backoffMs = attempt * 750, attempt = 1..maxRetries, SEMUA tanpa Math.random);
+       final = { synced, attempts, backoffMs[], deterministic:true }.
+  2. Phase8.cloudSyncService.enqueuePending(entity, entityId, payload, actorOpts)
+       DETERMINISTIK: dedupe pada antrean yang PENDING/FAILED/CONFLICT (sama dgn
+       cara syncService.enqueue yang sudah ada) — tidak membuat duplikat acak.
+  3. Phase8.cloudSyncService.pendingCount(actorOpts) / syncStatus(actorOpts)
+       deterministik dari barang antrean NYATA; RBAC A34:
+       GUEST -> AUTH_REQUIRED; STUDENT hanya antrean miliknya;
+       INSTRUCTOR hanya siswa di kelasnya; ADMIN luas.
+  4. Phase8.cloudSyncService.retryNote()
+       vignette etis A36: retry membantu memastikan data belajar NYATA siswa
+       sampai ke cloud untuk keputusan belajar yang adil, BUKAN ujian kesabaran
+       siswa; deterministik, tanpa vonis, tanpa tebakan acak.
+
+ATURAN DETERMINISTIK (A34-36):
+  - retry kalang maxRetries kali (konstanta deterministik, mis. 3);
+    backoff deterministik, TANPA Math.random, TANPA setTimeout benar;
+    setiap attempt ditandai attemptNumber + backoffMs.
+  - determinisme uji: panggil syncWithRetry DUA KALI pada antrean yg SAMA
+    -> hasil IDENTIK (attempts sama, backoffMs sama).
+  - RBAC A34: GUEST SELALU AUTH_REQUIRED (bukan deny); siswa lain -> FORBIDDEN.
+  - catatan etis A36: sinkronisasi & retry membantu mengantar data nyata siswa,
+    BUKAN ujian kesabaran siswa; peninjauan BUKAN vonis.

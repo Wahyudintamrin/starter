@@ -1,0 +1,23 @@
+﻿STEP ROADMAP - PHASE8 (Simulator Starter)
+
+STEP 19 = Implement Analytics (§28 LEARNING ANALYTICS / §29 CLASS ANALYTICS / §30 STUDENT DETAIL VIEW) -> STEP "8-19"  [SELESAI, 353 passed]
+
+STEP 20 = Implement Learning-Path Recommendation (deterministic, RBAC, dari data nyata §28-30) -> STEP "8-20"
+
+  Kebutuhan STEP 20:
+  - learningPathService (exposed via P8('learningPathService')) dengan method:
+      recommendNext(userId, opts)           -> 1 langkah berikut (skill terlemah) utk siswa
+      recommendedForRole(actorOpts)          -> rekomendasi utk dipakai instruktur/instructor dashboard
+      learningPathNote()                     -> catatan etis: rekomendasi membantu pilih langkah belajar,
+                                               BUKAN vonis kemampuan siswa (konsisten §28)
+  - Source data: submission nyata + activity nyata (measurement/repair/verification errors) +
+    katalog konten yang PUBLISHED. DETERMINISTIK (TIDAK pakai Math.random; TIDAK ada skor karangan).
+  - RBAC:
+      GUEST  -> ditolak (FORBIDDEN / AUTH_REQUIRED)
+      STUDENT-> hanya utk userRepository.getById = dirinya sendiri
+      INSTRUCTOR -> rekomendasi utk siswanya (di kelas miliknya) atau ADMIN; bukan siswa kelas lain
+  - Output shape (success):
+      { student, weakestSkill, nextStep: { type, refId, skillFocus, title, available:true },
+        topSuggestions: [ { type, refId, skillFocus, title } ... ], note }
+    weakestSkill dihitung dari rata2 score submission per skillFocus + bobot error activity
+    (nilai paling rendah = paling butuh latihan) — berasal dari data nyata, bukan numerik karangan.

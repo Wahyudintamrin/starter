@@ -1,0 +1,39 @@
+PHASE 8 — STEP 21: MENTOR REVIEW & FOLLOW-UP (§31–33, deterministic)
+
+RUANG LINGKUP (melanjutkan STEP 19☐20: siklus diagnosis → rekomendasi → tindak lanjut)
+  STEP 20 memberi rekomendasi langkah belajar berikut (learning-path, §30).
+  STEP 21 MENUTUP siklusnya: mentor (instruktur) MENINJAU rekomendasi tersebut,
+  menandai tindak lanjut nyata bagi siswanya, dan siswa melihatnya — semua
+  DETERMINISTIK, tanpa Math.random, dari data nyata submission/aktivitas.
+
+SEAM WAJIB (surface + service deterministik)
+  1. Phase8.learningPathService.extendWithReview(studentId, actorOpts)
+       → apiResult({ learnerId, exists, rbac, review: { … } })
+       RBAC (§30): actor wajib diberi akses; STUDENT hanya dirinya sendiri
+       (FORBIDDEN bila siswa lain); INSTRUCTOR hanya siswa di kelasnya;
+       GUEST/GUEST_ROLE selalu AUTH_REQUIRED.
+  2. Phase8.learningPathService.followUpPlan(studentId, actorOpts)
+       → apiResult({ learnerId, exists, steps, totalMistakes, note })
+       - steps DIHITUNG dari submissionRepository/activityRepository nyata
+         (weakest skill + common mistakes §28–30), bukan karangan.
+       - DETERMINISTIK: panggilan ulang dengan argumen identik → hasil identik.
+  3. Phase8.learningPathService.mentorNote()
+       → { vignette, warning } etis: review membantu siswa memilih langkah,
+         BUKAN vonis kemampuan (§31).
+
+RULES DETERMINISTIK (§31–33, wajib lolos tanpa uji-acak)
+  • test menyiapkan seed nyata: 1 siswa + 1 kelas + 1 kasus + assignment
+    DIAGNOSTIC_CASE + submission GRADED + 1 aktivitas FAILED_MEASUREMENT.
+  • extendWithReview: INSTRUCTOR dari kelas itu = diizinkan; GUEST = FORBIDDEN;
+    siswa lain = FORBIDDEN; siswa itu sendiri = diizinkan.
+  • followUpPlan: step pertama = skill terlemah (skor rata2 terendah dari
+    submission nyata siswa); langkah opsional berikutnya = konten belajar
+    PUBLISHED yang relevan; totalMistakes = hitungan nyata dari aktivitas
+    FAILED_MEASUREMENT/WRONG_HYPOTHESIS. Semua TANPA Math.random.
+  • mentorNote().warning MEMUAT frasa "bukan vonis" (etis §31).
+
+CATATAN TAMBAHAN
+  • Kesinambungan dengan STEP 20: setiap blok menyebut sumber sebenarnya
+    (computeLearningPath / analyticsRepository) sehingga suite tetap
+    deterministik end-to-end (§28–33).
+  • RBAC §30 tetap dijaga: view/review hanya utk pemangku yang sah.
