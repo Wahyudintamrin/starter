@@ -1,0 +1,7 @@
+{
+  "name": "starterlab-supabase-test",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Uji RLS skema Supabase StarterLab di PostgreSQL lokal (tanpa dependensi npm)",
+  "scripts": { "test": "node rls.test.js" }
+}
