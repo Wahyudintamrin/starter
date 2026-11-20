@@ -2670,7 +2670,7 @@
                 fail(wrongPortalMsg());
                 return;
             }
-            if (lu.role === 'ADMIN' && password === DEFAULT_ADMIN_PW) { askForceChange({ localId: lu.id, username: username, oldPw: password, server: false }); return; }
+            if ((lu.role === 'ADMIN' && password === DEFAULT_ADMIN_PW) || (lu.role === 'STUDENT' && password === 'siswa123')) { askForceChange({ localId: lu.id, username: username, oldPw: password, server: false }); return; }
             finish(lu.id);
         }
 

@@ -253,47 +253,29 @@
                     <p class="hub-muted">Fitur lanjutan (TECH, REC, CSV, LOG, DEBUG) ada di menu <b>Lainnya</b> pada toolbar.</p>
                 </details>
 
-                <!-- Control Panel -->
-                <div class="control-panel" id="controlPanel">
-                    <div class="ignition-control">
-                        <h3>KUNCI KONTAK</h3>
-                        <div class="ignition-knob-area">
-                            <div class="ignition-ring" role="radiogroup" aria-label="Ignition switch position">
-                                <div class="ignition-position" data-pos="OFF" role="radio" aria-checked="true" tabindex="0" onclick="setIgnition('OFF')" onkeydown="if(event.key==='Enter'||event.key===' ')setIgnition('OFF')">
-                                    <span class="pos-label">OFF</span>
-                                </div>
-                                <div class="ignition-position" data-pos="ON" role="radio" aria-checked="false" tabindex="0" onclick="setIgnition('ON')" onkeydown="if(event.key==='Enter'||event.key===' ')setIgnition('ON')">
-                                    <span class="pos-label">ON</span>
-                                </div>
-                                <div class="ignition-position" data-pos="START" role="radio" aria-checked="false" tabindex="0" onclick="setIgnition('START')" onkeydown="if(event.key==='Enter'||event.key===' ')setIgnition('START')">
-                                    <span class="pos-label">START</span>
-                                </div>
-                                <div class="ignition-indicator" id="ignIndicator"></div>
+                <div class="sim-diagram-area" id="simDiagramArea">
+                    <!-- Kunci kontak: di sudut atas layar simulator -->
+                <div class="ignition-control">
+                    <h3>KUNCI KONTAK</h3>
+                    <div class="ignition-knob-area">
+                        <div class="ignition-ring" role="radiogroup" aria-label="Ignition switch position">
+                            <div class="ignition-position" data-pos="OFF" role="radio" aria-checked="true" tabindex="0" onclick="setIgnition('OFF')" onkeydown="if(event.key==='Enter'||event.key===' ')setIgnition('OFF')">
+                                <span class="pos-label">OFF</span>
                             </div>
+                            <div class="ignition-position" data-pos="ON" role="radio" aria-checked="false" tabindex="0" onclick="setIgnition('ON')" onkeydown="if(event.key==='Enter'||event.key===' ')setIgnition('ON')">
+                                <span class="pos-label">ON</span>
+                            </div>
+                            <div class="ignition-position" data-pos="START" role="radio" aria-checked="false" tabindex="0" onclick="setIgnition('START')" onkeydown="if(event.key==='Enter'||event.key===' ')setIgnition('START')">
+                                <span class="pos-label">START</span>
+                            </div>
+                            <div class="ignition-indicator" id="ignIndicator"></div>
                         </div>
                     </div>
-                    <div class="control-buttons">
-                        <button class="btn-ctrl btn-reset" onclick="resetSimulation()" title="Reset semua ke kondisi awal">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
-                            RESET
-                        </button>
-                    </div>
+                    <button class="btn-ctrl btn-reset" onclick="resetSimulation()" title="Reset semua ke kondisi awal">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+                        RESET
+                    </button>
                 </div>
-
-                <!-- Phase 2: Starting Timeline -->
-                <div class="p2-timeline" id="p2-timeline">
-                    <div class="timeline-track">
-                        <div class="timeline-seg" data-step="rest"><span>REST</span></div>
-                        <div class="timeline-seg" data-step="ign"><span>IGN</span></div>
-                        <div class="timeline-seg" data-step="relay"><span>RELAY</span></div>
-                        <div class="timeline-seg" data-step="sol"><span>SOL</span></div>
-                        <div class="timeline-seg" data-step="pinion"><span>PINION</span></div>
-                        <div class="timeline-seg" data-step="crank"><span>CRANK</span></div>
-                        <div class="timeline-seg" data-step="run"><span>RUN</span></div>
-                    </div>
-                </div>
-
-                <div class="sim-diagram-area" id="simDiagramArea">
                     <svg id="starterSVG" viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
                         <defs>
                             <filter id="glow">
@@ -1050,7 +1032,7 @@
         <div class="materi-grid" id="materiGrid" style="display:none"></div>
 
         <!-- Phase 5: Learning Lab (fitur lanjutan, tertutup) -->
-        <details class="hub-legacy"><summary>Fitur lanjutan: Learning Lab terstruktur (modul, lesson &amp; praktik terbimbing)</summary>
+        <details class="hub-legacy" data-lock="materi"><summary>Fitur lanjutan: Learning Lab terstruktur (modul, lesson &amp; praktik terbimbing)</summary>
         <div class="p5-section">
             <div class="page-header">
                 <h2>Learning Lab (Fase 5)</h2>
@@ -1128,7 +1110,7 @@
         </div>
 
         <!-- Phase 5: Assessment Center (fitur lanjutan) -->
-        <details class="hub-legacy"><summary>Fitur lanjutan: Assessment Center (kuis acak &amp; practical assessment)</summary>
+        <details class="hub-legacy" data-lock="evaluasi"><summary>Fitur lanjutan: Assessment Center (kuis acak &amp; practical assessment)</summary>
         <div class="p5-section">
             <div id="p5-assessment"></div>
         </div>
@@ -1148,7 +1130,7 @@
             <p class="subtitle">Rekap kemajuan, pencapaian, laporan, dan sertifikat</p>
         </div>
         <div id="hub-progress"></div>
-        <details class="hub-legacy"><summary>Data lanjutan: Learning Lab, pencapaian &amp; sertifikat</summary>
+        <details class="hub-legacy" data-lock="progres"><summary>Data lanjutan: Learning Lab, pencapaian &amp; sertifikat</summary>
         <div id="p5-progress"></div>
         </details>
     </section>
@@ -1161,7 +1143,7 @@
             <p class="subtitle">Lembar kerja praktik: tujuan, alat, keselamatan, dan hasil pengukuran</p>
         </div>
         <div id="hub-js-list"></div>
-        <details class="hub-legacy"><summary>Fitur lanjutan: Job Sheet Learning Lab (Fase 5)</summary>
+        <details class="hub-legacy" data-lock="jobsheet"><summary>Fitur lanjutan: Job Sheet Learning Lab (Fase 5)</summary>
         <div class="p5-section">
             <div id="p5-jobsheets"></div>
         </div>

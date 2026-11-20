@@ -95,6 +95,9 @@
         return request('POST', '/progress/module', b);
     }
     function recordAssessment(p) { return request('POST', '/progress/assessment', p); }
+    /* Kuis resmi: dinilai server. quizStart -> {sessionId,...}; quizSubmit -> {score, review, ...} */
+    function quizStart(quizId) { return request('POST', '/progress/quiz/start', { quizId: quizId }).then(payload); }
+    function quizSubmit(sessionId, answers) { return request('POST', '/progress/quiz/submit', { sessionId: sessionId, answers: answers }).then(payload); }
     function recordSession(p) { return request('POST', '/progress/session', p); }
     function recordAttempt(p) { return request('POST', '/progress/attempt', p); }
     function importLocal(store, hash) { return request('POST', '/progress/import', { store: store, hash: hash }); }
@@ -134,7 +137,7 @@
         },
         isStudent: isStudent, isTeacher: isTeacher,
         progress: progress, activity: activity,
-        recordModule: recordModule, recordAssessment: recordAssessment,
+        recordModule: recordModule, recordAssessment: recordAssessment, quizStart: quizStart, quizSubmit: quizSubmit,
         recordSession: recordSession, recordAttempt: recordAttempt,
         importLocal: importLocal, fire: fire,
         teacherClasses: teacherClasses, classProgress: classProgress,

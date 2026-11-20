@@ -71,6 +71,7 @@
     var ICON = {
         back: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg>',
         next: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="9 18 15 12 9 6"/></svg>',
+        lock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
         check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"/></svg>',
         clock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
         warn: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
@@ -264,16 +265,17 @@
                 case 'beranda': renderHomeExtras(); break;
             }
             showPage(page);
+            applyLegacyLocks();
         } finally { routing = false; }
     }
 
-    function toast(msg, kind) {
+    function toast(msg, kind, ms) {
         var t = $('hub-toast');
         if (!t) { t = D.createElement('div'); t.id = 'hub-toast'; t.className = 'hub-toast'; D.body.appendChild(t); }
         t.className = 'hub-toast show ' + (kind || '');
         t.innerHTML = msg;
         clearTimeout(toast._t);
-        toast._t = setTimeout(function () { t.className = 'hub-toast'; }, 3200);
+        toast._t = setTimeout(function () { t.className = 'hub-toast'; }, ms || 3200);
     }
 
     function crumb(items) {
@@ -306,6 +308,74 @@
         if (r && r.dibuka) return 'dibuka';
         return 'baru';
     }
+    /* Akses bertahap: Modul 1 selalu terbuka; modul berikutnya baru terbuka bila SEMUA modul sebelumnya sudah ditandai paham. */
+    /* modul dianggap tuntas bila sudah Paham DAN (bila ada) cek pemahamannya dijawab benar */
+    function matDone(m) { var r = store.materi[m.id]; return !!(r && r.paham && (!m.cek || r.cek)); }
+    function lockedBy(id) {
+        for (var i = 0; i < MATERI.length; i++) {
+            if (MATERI[i].id === id) return null;
+            if (!matDone(MATERI[i])) return MATERI[i].id;   /* modul pertama yang belum dipahami */
+        }
+        return null;
+    }
+    /* Akses bertahap untuk Praktik/Job sheet, Diagnosis, dan Evaluasi: item berikutnya terbuka setelah item sebelumnya DIKERJAKAN. */
+    function seqBlocker(ids, doneFn, id) {
+        for (var i = 0; i < ids.length; i++) {
+            if (ids[i] === id) return null;
+            if (!doneFn(ids[i])) return ids[i];
+        }
+        return null;
+    }
+    function jsOrder() {   /* urutan Praktik dulu, sisa job sheet menyusul; dipakai bersama oleh menu Praktik dan Job sheet */
+        var o = PRAKTIK_MAP.slice();
+        JOBS.forEach(function (j) { if (o.indexOf(j.id) < 0) o.push(j.id); });
+        return o;
+    }
+    function jsDone(id) { var r = store.js[id]; return !!(r && r.selesai); }
+    function jsLockedBy(id) { return seqBlocker(jsOrder(), jsDone, id); }
+    function caseLockedBy(id) { return seqBlocker(CASES.map(function (c) { return c.id; }), function (x) { var r = store.diag[x]; return !!(r && r.selesai); }, id); }
+    function quizLockedBy(id) { return seqBlocker(QUIZZES.map(function (q) { return q.id; }), function (x) { var r = store.quiz[x]; return !!(r && r.best >= KKM); }, id); }   /* harus LULUS (KKM) */
+    function lockBtn(label, cls) { return '<button type="button" class="hub-btn ' + (cls || 'ghost') + '" disabled title="Terkunci">' + ICON.lock + ' ' + label + ' (terkunci)</button>'; }
+    function allMateriDone() { return MATERI.every(matDone); }
+    function allDone(key) {
+        if (key === 'materi') return allMateriDone();
+        if (key === 'evaluasi') return QUIZZES.every(function (q) { var r = store.quiz[q.id]; return !!(r && r.best >= KKM); });
+        if (key === 'jobsheet') return JOBS.every(function (j) { return jsDone(j.id); });
+        if (key === 'progres') return allDone('materi') && allDone('jobsheet') && allDone('evaluasi') && CASES.every(function (c) { var r = store.diag[c.id]; return !!(r && r.selesai); });
+        return true;
+    }
+    var LEGACY_NOTE = {
+        materi: 'Terbuka setelah semua modul materi dipahami.',
+        evaluasi: 'Terbuka setelah semua kuis (Kuis 1–5 dan Ujian Akhir) lulus.',
+        jobsheet: 'Terbuka setelah semua job sheet selesai.',
+        progres: 'Terbuka setelah materi, job sheet, diagnosis, dan evaluasi tuntas.'
+    };
+    /* Blok "Fitur lanjutan" di index.html ikut terkunci: isi disembunyikan dan tidak bisa dibuka sampai syaratnya terpenuhi. */
+    function applyLegacyLocks() {
+        try {
+            D.querySelectorAll('details.hub-legacy[data-lock]').forEach(function (d) {
+                var key = d.getAttribute('data-lock'), locked = !allDone(key), sm = d.querySelector('summary');
+                if (!sm.getAttribute('data-orig')) sm.setAttribute('data-orig', sm.textContent);
+                if (locked) {
+                    d.removeAttribute('open'); d.setAttribute('data-locked', '1');
+                    sm.textContent = '🔒 ' + sm.getAttribute('data-orig') + ' — terkunci. ' + LEGACY_NOTE[key];
+                    if (!d._lk) { d._lk = true; d.addEventListener('toggle', function () { if (d.getAttribute('data-locked') && d.open) d.removeAttribute('open'); }); }
+                } else {
+                    d.removeAttribute('data-locked'); sm.textContent = sm.getAttribute('data-orig');
+                }
+            });
+        } catch (e) { /* noop */ }
+    }
+    /* Item terkunci: TIDAK ada isi yang dirender dan alamat tidak dialihkan; hanya layar "terkunci". */
+    function lockedNotice(msg) { toast(ICON.lock + ' ' + msg, 'warn', 2600); }
+    function renderLockedScreen(el, crumbHtml, what, needHtml, goPage, goId, goLabel) {
+        if (!el) return;
+        el.innerHTML = crumbHtml
+            + '<section class="hub-box hub-locked-screen" role="alert"><div class="hub-locked-ico">' + ICON.lock + '</div>'
+            + '<h2>' + esc(what) + ' terkunci</h2><p>' + needHtml + '</p>'
+            + '<p class="hub-muted">Isi tidak ditampilkan sampai syarat terpenuhi. Setelah itu otomatis terbuka.</p>'
+            + '<button type="button" class="hub-btn primary" onclick="StarterHub.go(\'' + goPage + '\',' + (typeof goId === 'number' ? goId : '\'' + goId + '\'') + ')">' + esc(goLabel) + ' ' + ICON.next + '</button></section>';
+    }
     function renderMateriList() {
         var el = $('hub-materi');
         if (!el) return;
@@ -321,6 +391,11 @@
             var st = matStatus(m.id);
             var stTxt = st === 'paham' ? chip(ICON.check + ' Selesai dibaca', 'ok') : st === 'dibuka' ? chip('Sedang dipelajari', 'warn') : chip('Belum dibaca', 'muted');
             if (store.materi[m.id] && store.materi[m.id].cek) stTxt += ' ' + chip('Cek ' + ICON.check, 'ok');
+            var lk = lockedBy(m.id);
+            if (lk) return '<button type="button" class="hub-mat-card st-locked" aria-disabled="true" onclick="StarterHub.lockedNotice(\'Modul ' + pad2(m.id) + ' terkunci. Pahami Modul ' + pad2(lk) + ' dulu.\')" title="Terkunci">'
+                + '<div class="hub-mat-top"><span class="hub-mat-num">MODUL ' + pad2(m.id) + '</span>' + chip(ICON.lock + ' Terkunci', 'muted') + '</div>'
+                + '<h3>' + esc(m.title) + '</h3><p>Pahami <b>Modul ' + pad2(lk) + '</b> terlebih dahulu untuk membuka modul ini.</p>'
+                + '<div class="hub-mat-meta">' + ICON.clock + ' ' + m.durasi + ' menit · ' + esc(m.tingkat) + '</div></button>';
             return '<button type="button" class="hub-mat-card st-' + st + '" onclick="StarterHub.go(\'materi-baca\',' + m.id + ')">'
                 + '<div class="hub-mat-top"><span class="hub-mat-num">MODUL ' + pad2(m.id) + '</span>' + stTxt + '</div>'
                 + '<h3>' + esc(m.title) + '</h3><p>' + esc(m.desc) + '</p>'
@@ -345,6 +420,12 @@
     function renderReader(id) {
         var m = MATERI.find(function (x) { return x.id === id; }) || MATERI[0];
         if (!m) return;
+        var blocker = lockedBy(m.id);
+        if (blocker) {   /* terkunci: tampilkan layar kunci saja, tanpa isi materi */
+            var bm = MATERI.find(function (x) { return x.id === blocker; });
+            return renderLockedScreen($('hub-reader'), crumb([{ label: 'Materi', go: 'materi' }, { label: 'Modul ' + pad2(m.id) }]), 'Modul ' + pad2(m.id),
+                'Pahami <b>Modul ' + pad2(blocker) + (bm ? ' — ' + esc(bm.title) : '') + '</b> terlebih dahulu (jawab cek pemahaman, lalu tekan Paham).', 'materi-baca', blocker, 'Buka Modul ' + pad2(blocker));
+        }
         readerId = m.id;
         if (!store.materi[m.id]) store.materi[m.id] = {};
         if (!store.materi[m.id].dibuka) { store.materi[m.id].dibuka = now(); logAct('materi', 'Membuka Modul ' + pad2(m.id) + ' — ' + m.title); save(); }
@@ -380,12 +461,14 @@
         html += '</article><aside class="hub-aside"><div class="hub-aside-card"><div class="hub-aside-title">Daftar modul</div><ol class="hub-toc">'
             + MATERI.map(function (x) {
                 var st = matStatus(x.id);
+                if (lockedBy(x.id)) return '<li class="st-locked" title="Terkunci"><span class="toc-locked"><span class="dot">' + ICON.lock + '</span>' + esc(x.title) + '</span></li>';
                 return '<li class="' + (x.id === m.id ? 'cur ' : '') + 'st-' + st + '"><a href="#/materi-baca/' + x.id + '"><span class="dot">' + (st === 'paham' ? ICON.check : pad2(x.id)) + '</span>' + esc(x.title) + '</a></li>';
             }).join('') + '</ol></div></aside></div>'
             + '<footer class="hub-actionbar">'
             + '<button type="button" class="hub-btn" onclick="StarterHub.go(\'materi\')">' + ICON.back + ' Kembali</button>'
-            + '<button type="button" id="hub-paham-btn" class="hub-btn ' + (paham ? 'success' : 'primary-outline') + '" onclick="StarterHub.togglePaham(' + m.id + ')">' + ICON.check + ' ' + (paham ? 'Sudah Paham' : 'Paham') + '</button>'
-            + (next ? '<button type="button" class="hub-btn primary" onclick="StarterHub.nextMateri()">Lanjut: ' + esc(next.title) + ' ' + ICON.next + '</button>'
+            + '<button type="button" id="hub-paham-btn" class="hub-btn ' + (paham ? 'success' : 'primary-outline') + '" onclick="StarterHub.togglePaham(' + m.id + ')"' + (!paham && m.cek && !mastered ? ' disabled title="Jawab Cek pemahaman dengan benar dulu"' : '') + '>' + ICON.check + ' ' + (paham ? 'Sudah Paham' : (m.cek && !mastered ? 'Paham (jawab cek dulu)' : 'Paham')) + '</button>'
+            + (next ? (paham ? '<button type="button" class="hub-btn primary" onclick="StarterHub.nextMateri()">Lanjut: ' + esc(next.title) + ' ' + ICON.next + '</button>'
+                : '<button type="button" class="hub-btn primary" disabled title="Tekan Paham dulu untuk membuka modul berikutnya">' + ICON.lock + ' Tekan Paham untuk membuka modul berikutnya</button>')
                 : '<button type="button" class="hub-btn primary" onclick="StarterHub.go(\'evaluasi\')">Selesai — Kerjakan Evaluasi ' + ICON.next + '</button>')
             + '</footer>';
         el.innerHTML = html;
@@ -411,6 +494,8 @@
         fb.innerHTML = ok ? '<b>Tepat!</b> ' + esc(m.cek.bahas) : '<b>Belum tepat.</b> Baca kembali bagian materi di atas, lalu coba lagi.';
         if (ok) {
             store.materi[m.id].cek = true; save();
+            var pb = $('hub-paham-btn');
+            if (pb && !store.materi[m.id].paham) { pb.removeAttribute('disabled'); pb.removeAttribute('title'); pb.innerHTML = ICON.check + ' Paham'; }
             var mi = D.querySelector('.hub-mastery .hub-mastery-item:last-child');
             if (mi) { mi.className = 'hub-mastery-item ok'; mi.innerHTML = 'Penguasaan (cek pemahaman): <b>Lulus</b>'; }
         }
@@ -418,22 +503,25 @@
     function togglePaham(id) {
         var r = store.materi[id] || (store.materi[id] = {});
         var m = MATERI.find(function (x) { return x.id === id; });
+        if (!r.paham && lockedBy(id)) { toast('Modul ' + pad2(id) + ' masih terkunci.', 'warn'); return; }
+        if (!r.paham && m && m.cek && !r.cek) { toast('Jawab Cek pemahaman dengan benar dulu, baru bisa menandai Paham.', 'warn'); return; }
         if (r.paham) {
             r.paham = false; r.pahamAt = null;
             logAct('materi', 'Membatalkan tanda paham Modul ' + pad2(id));
             save(); renderReader(id);
-            toast('Tanda paham Modul ' + pad2(id) + ' dibatalkan.');
+            toast('Tanda paham Modul ' + pad2(id) + ' dibatalkan.', '', 1500);
             return;
         }
         r.paham = true; r.pahamAt = now();
         logAct('materi', 'Memahami Modul ' + pad2(id) + ' — ' + (m ? m.title : ''));
         save(); renderReader(id);
         var s = summary();
-        toast(ICON.check + ' Modul ' + pad2(id) + ' ditandai <b>paham</b>. Progres materi ' + s.mDone + '/' + MATERI.length + ' (' + s.p.materi + '%).', 'ok');
+        toast(ICON.check + ' Modul ' + pad2(id) + ' ditandai <b>paham</b>. Progres materi ' + s.mDone + '/' + MATERI.length + ' (' + s.p.materi + '%).', 'ok', 1800);
     }
     function nextMateri() {
         var idx = MATERI.findIndex(function (x) { return x.id === readerId; });
         var nx = MATERI[idx + 1];
+        if (nx && matStatus(readerId) !== 'paham') { toast('Tekan Paham dulu untuk membuka modul berikutnya.', 'warn'); return; }
         if (nx) go('materi-baca', nx.id); else go('evaluasi');
     }
     function materiAction(i) {
@@ -472,6 +560,11 @@
             + '<div class="hub-list-cards">' + PRAKTIK_MAP.map(function (id, i) {
                 var job = JOBS.find(function (j) { return j.id === id; }) || { title: id, objective: '' };
                 var t = (typeof PRAKTIK_ITEMS !== 'undefined' && PRAKTIK_ITEMS[i] && PRAKTIK_ITEMS[i].title) || job.title;
+                var lk = jsLockedBy(id);
+                if (lk) return '<button type="button" class="hub-row-card st-locked" aria-disabled="true" title="Terkunci" onclick="StarterHub.lockedNotice(\'Terkunci. Selesaikan item sebelumnya dulu.\')">'
+                    + '<span class="hub-row-num">' + pad2(i + 1) + '</span>'
+                    + '<span class="hub-row-main"><b>' + esc(t) + '</b><small>Terkunci — selesaikan job sheet ' + esc(lk) + ' terlebih dahulu</small></span>'
+                    + chip(ICON.lock + ' Terkunci', 'muted') + '</button>';
                 return '<button type="button" class="hub-row-card" onclick="StarterHub.go(\'jobsheet-detail\',\'' + id + '\')">'
                     + '<span class="hub-row-num">' + pad2(i + 1) + '</span>'
                     + '<span class="hub-row-main"><b>' + esc(t) + '</b><small>' + esc(job.objective) + ' · Job sheet ' + id + '</small></span>'
@@ -485,6 +578,10 @@
         el.innerHTML = '<div class="hub-summary"><div class="hub-summary-main"><div class="hub-summary-label">Job sheet selesai</div><div class="hub-summary-value">' + s.jDone + ' <small>/ ' + JOBS.length + '</small></div>' + bar(s.p.praktik) + '</div>'
             + '<div class="hub-summary-note">Klik job sheet untuk membuka lembar kerjanya di halaman tersendiri. Hasil tersimpan otomatis dan bisa dicetak.</div></div>'
             + '<div class="hub-js-grid">' + JOBS.map(function (j) {
+                var lk = jsLockedBy(j.id);
+                if (lk) return '<button type="button" class="hub-js-card st-locked" aria-disabled="true" title="Terkunci" onclick="StarterHub.lockedNotice(\'Terkunci. Selesaikan item sebelumnya dulu.\')">'
+                    + '<div class="hub-mat-top"><span class="hub-mat-num">' + j.id + '</span>' + chip(ICON.lock + ' Terkunci', 'muted') + '</div>'
+                    + '<h3>' + esc(j.title) + '</h3><p>Selesaikan <b>job sheet ' + esc(lk) + '</b> terlebih dahulu.</p></button>';
                 return '<button type="button" class="hub-js-card st-' + jsStatus(j.id) + '" onclick="StarterHub.go(\'jobsheet-detail\',\'' + j.id + '\')">'
                     + '<div class="hub-mat-top"><span class="hub-mat-num">' + j.id + '</span>' + jsChip(j.id) + '</div>'
                     + '<h3>' + esc(j.title) + '</h3><p>' + esc(j.objective) + '</p>'
@@ -500,6 +597,8 @@
     function renderJobDetail(id) {
         var j = JOBS.find(function (x) { return x.id === id; }) || JOBS[0];
         if (!j) return;
+        var jb = jsLockedBy(j.id);
+        if (jb) return renderLockedScreen($('hub-js-detail'), crumb([{ label: 'Job Sheet', go: 'jobsheet' }, { label: j.id }]), 'Job sheet ' + j.id, 'Selesaikan dan kirim <b>job sheet ' + esc(jb) + '</b> terlebih dahulu.', 'jobsheet-detail', jb, 'Buka job sheet ' + jb);
         curJob = j;
         var s = jsState(j.id);
         var isCase = j.expectedResult && j.expectedResult.mode === 'CASE';
@@ -554,12 +653,13 @@
             + '<aside class="hub-aside"><div class="hub-aside-card"><div class="hub-aside-title">Kelengkapan</div><div id="hub-js-progress"></div></div>'
             + '<div class="hub-aside-card"><div class="hub-aside-title">Job sheet lain</div><ol class="hub-toc">' + JOBS.map(function (x) {
                 var st = jsStatus(x.id);
+                if (jsLockedBy(x.id)) return '<li class="st-locked" title="Terkunci"><span class="toc-locked"><span class="dot">' + ICON.lock + '</span>' + esc(x.title) + '</span></li>';
                 return '<li class="' + (x.id === j.id ? 'cur ' : '') + 'st-' + (st === 'selesai' ? 'paham' : st) + '"><a href="#/jobsheet-detail/' + x.id + '"><span class="dot">' + (st === 'selesai' ? ICON.check : x.id.slice(-2)) + '</span>' + esc(x.title) + '</a></li>';
             }).join('') + '</ol></div></aside></div>'
             + '<footer class="hub-actionbar"><button class="hub-btn" onclick="StarterHub.go(\'jobsheet\')">' + ICON.back + ' Kembali</button>'
             + '<button class="hub-btn primary-outline" onclick="StarterHub.jsSaveDraft()">Simpan draf</button>'
             + '<button class="hub-btn primary" onclick="StarterHub.jsSubmit()">' + ICON.check + ' Selesai & Kirim</button>'
-            + (next ? '<button class="hub-btn ghost" onclick="StarterHub.go(\'jobsheet-detail\',\'' + next.id + '\')">Job sheet berikutnya ' + ICON.next + '</button>' : '')
+            + (next ? (jsLockedBy(next.id) ? lockBtn('Job sheet berikutnya') : '<button class="hub-btn ghost" onclick="StarterHub.go(\'jobsheet-detail\',\'' + next.id + '\')">Job sheet berikutnya ' + ICON.next + '</button>') : '')
             + '</footer>';
         el.innerHTML = html;
         updateJobProgress();
@@ -644,7 +744,7 @@
             + '<div class="hub-breakdown">' + [['Langkah kerja', r.langkah, 30], ['Hasil & konsistensi', r.hasil, 30], ['Pertanyaan', r.pertanyaan, 20], ['Kesimpulan', r.kesimpulan, 10], ['Penilaian diri', r.diri, 10]].map(function (x) {
                 return '<div><span>' + x[0] + '</span><b>' + x[1] + '/' + x[2] + '</b></div>';
             }).join('') + '</div>'
-            + '<div class="hub-try-row">' + (next ? '<button class="hub-btn primary" onclick="StarterHub.go(\'jobsheet-detail\',\'' + next.id + '\')">Lanjut ' + next.id + ' ' + ICON.next + '</button>' : '') + '<button class="hub-btn ghost" onclick="StarterHub.go(\'progres\')">Lihat progres</button></div></div></section>';
+            + '<div class="hub-try-row">' + (next ? (jsLockedBy(next.id) ? lockBtn('Lanjut ' + next.id, 'primary') : '<button class="hub-btn primary" onclick="StarterHub.go(\'jobsheet-detail\',\'' + next.id + '\')">Lanjut ' + next.id + ' ' + ICON.next + '</button>') : '') + '<button class="hub-btn ghost" onclick="StarterHub.go(\'progres\')">Lihat progres</button></div></div></section>';
         if (scroll) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     function printJob() {
@@ -680,7 +780,10 @@
             + '<ol class="hub-howto"><li><b>Baca keluhan</b> pelanggan & gejala.</li><li><b>Lakukan pemeriksaan</b> — pilih tes, bandingkan hasil dengan nilai acuan.</li><li><b>Tentukan penyebab</b> berdasarkan bukti.</li><li><b>Lihat pembahasan</b> & langkah perbaikan.</li></ol></div>'
             + '<div class="hub-filter">' + lv.map(function (l) { return '<button class="hub-pill' + (l === diagFilter ? ' active' : '') + '" onclick="StarterHub.diagFilter(\'' + l + '\')">' + l + '</button>'; }).join('') + '</div>'
             + '<div class="hub-case-grid">' + CASES.filter(function (c) { return diagFilter === 'Semua' || c.tingkat === diagFilter; }).map(function (c) {
-                var r = store.diag[c.id];
+                var r = store.diag[c.id], lk = caseLockedBy(c.id);
+                if (lk) return '<button type="button" class="hub-case-card st-locked lvl-' + c.tingkat.toLowerCase() + '" aria-disabled="true" title="Terkunci" onclick="StarterHub.lockedNotice(\'Terkunci. Selesaikan item sebelumnya dulu.\')">'
+                    + '<div class="hub-mat-top"><span class="hub-mat-num">' + c.id + ' · ' + c.tingkat.toUpperCase() + '</span>' + chip(ICON.lock + ' Terkunci', 'muted') + '</div>'
+                    + '<h3>' + esc(c.judul) + '</h3><p>Selesaikan <b>kasus ' + esc(lk) + '</b> terlebih dahulu.</p></button>';
                 var st = r && r.selesai ? chip(ICON.check + ' Selesai · skor ' + r.skor, 'ok') : r && r.tests && r.tests.length ? chip('Sedang dikerjakan', 'warn') : chip('Belum', 'muted');
                 return '<button type="button" class="hub-case-card lvl-' + c.tingkat.toLowerCase() + '" onclick="StarterHub.go(\'diagnosis-kasus\',\'' + c.id + '\')">'
                     + '<div class="hub-mat-top"><span class="hub-mat-num">' + c.id + ' · ' + c.tingkat.toUpperCase() + '</span>' + st + '</div>'
@@ -702,6 +805,8 @@
     function renderCase(id) {
         var c = CASES.find(function (x) { return x.id === id; }) || CASES[0];
         if (!c) return;
+        var cb = caseLockedBy(c.id);
+        if (cb) return renderLockedScreen($('hub-case'), crumb([{ label: 'Diagnosis', go: 'diagnosis' }, { label: c.id }]), 'Kasus ' + c.id, 'Selesaikan <b>kasus ' + esc(cb) + '</b> terlebih dahulu.', 'diagnosis-kasus', cb, 'Buka kasus ' + cb);
         curCase = c;
         var r = caseRec(c.id);
         if (r.selesai && !caseRun) caseRun = { review: true };
@@ -734,7 +839,7 @@
             + '<div id="hub-diag-result"></div>'
             + '</div><div class="hub-case-right"><section class="hub-box sticky"><h3>Catatan hasil pemeriksaan</h3><div id="hub-diag-log"></div><div id="hub-evidence" class="hub-evidence"></div></section></div></div>'
             + '<footer class="hub-actionbar"><button class="hub-btn" onclick="StarterHub.go(\'diagnosis\')">' + ICON.back + ' Kembali ke daftar kasus</button>'
-            + (next ? '<button class="hub-btn ghost" onclick="StarterHub.go(\'diagnosis-kasus\',\'' + next.id + '\')">Kasus berikutnya ' + ICON.next + '</button>' : '') + '</footer>';
+            + (next ? (caseLockedBy(next.id) ? lockBtn('Kasus berikutnya') : '<button class="hub-btn ghost" onclick="StarterHub.go(\'diagnosis-kasus\',\'' + next.id + '\')">Kasus berikutnya ' + ICON.next + '</button>') : '') + '</footer>';
         el.innerHTML = html;
         renderCaseLog();
         renderCaseEvidence();
@@ -830,7 +935,7 @@
             + '<div class="hub-two"><div><h4>Bukti kunci</h4><ul class="hub-list">' + c.kunci.map(function (k) { var t = TESTS.find(function (x) { return x.id === k; }); var res = resultFor(c, k); return '<li>' + esc(t.nama) + ': <b>' + esc(res.v) + '</b></li>'; }).join('') + '</ul></div>'
             + '<div><h4>Langkah perbaikan</h4><ol class="hub-list num">' + c.perbaikan.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ol></div></div>'
             + (r.det && r.det.length ? '<div class="hub-breakdown">' + r.det.map(function (d) { return '<div><span>' + d[0] + '</span><b>' + d[1] + '</b></div>'; }).join('') + '</div>' : '<p class="hub-ok-txt">Sempurna — efisien, tanpa petunjuk, didukung bukti kunci.</p>')
-            + '<div class="hub-try-row">' + (next ? '<button class="hub-btn primary" onclick="StarterHub.go(\'diagnosis-kasus\',\'' + next.id + '\')">Kasus berikutnya ' + ICON.next + '</button>' : '') + '<button class="hub-btn ghost" onclick="StarterHub.go(\'diagnosis\')">Daftar kasus</button></div></div></section>';
+            + '<div class="hub-try-row">' + (next ? (caseLockedBy(next.id) ? lockBtn('Kasus berikutnya', 'primary') : '<button class="hub-btn primary" onclick="StarterHub.go(\'diagnosis-kasus\',\'' + next.id + '\')">Kasus berikutnya ' + ICON.next + '</button>') : '') + '<button class="hub-btn ghost" onclick="StarterHub.go(\'diagnosis\')">Daftar kasus</button></div></div></section>';
         if (scroll) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     function resetCase() {
@@ -857,13 +962,34 @@
        ============================================================ */
     function quizQuestions(qz, attempt) {
         var out = [];
+        function withId(q, bank, idx) { var c = Object.assign({}, q); c.qid = bank + ':' + idx; return c; }
         qz.bank.forEach(function (b) {
             var arr = QB[b] || [];
             if (qz.pick) {
-                for (var i = 0; i < qz.pick; i++) out.push(arr[(i * 2 + (attempt || 0)) % arr.length]);
-            } else arr.forEach(function (q) { out.push(q); });
+                for (var i = 0; i < qz.pick; i++) { var ix = (i * 2 + (attempt || 0)) % arr.length; out.push(withId(arr[ix], b, ix)); }
+            } else arr.forEach(function (q, ix) { out.push(withId(q, b, ix)); });
         });
         return out;
+    }
+    /* ---- Penilaian resmi di SERVER (SQLite REST atau Supabase). Tanpa sesi siswa/server -> mode latihan lokal. ---- */
+    function officialBackend() {
+        var W = window;
+        try {
+            if (W.ProgressApi && W.ProgressApi.token && W.ProgressApi.token() && W.ProgressApi.isStudent && W.ProgressApi.isStudent() && W.ProgressApi.quizStart) {
+                return {
+                    start: function (id) { return W.ProgressApi.quizStart(id); },
+                    submit: function (sid, ans) { return W.ProgressApi.quizSubmit(sid, ans); }
+                };
+            }
+            if (W.StarterCloud && W.StarterCloud.enabled && W.StarterCloud.enabled() && W.StarterCloud.hasToken && W.StarterCloud.hasToken() && W.StarterCloud.quizStart) {
+                function wrap(p) { return p.then(function (n) { if (n && n.ok !== false) return { ok: true, data: n }; return { ok: false, error: { code: n && n.code, message: n && n.message }, offline: !!(n && n.offline) }; }); }
+                return {
+                    start: function (id) { return wrap(W.StarterCloud.quizStart(id)); },
+                    submit: function (sid, ans) { return wrap(W.StarterCloud.quizSubmit(sid, ans)); }
+                };
+            }
+        } catch (e) { /* noop */ }
+        return null;
     }
     function renderEvalList() {
         var el = $('hub-eval');
@@ -872,7 +998,13 @@
         el.innerHTML = '<div class="hub-summary"><div class="hub-summary-main"><div class="hub-summary-label">Kuis lulus (KKM ' + KKM + ')</div><div class="hub-summary-value">' + s.qPass + ' <small>/ ' + QUIZZES.length + '</small></div>' + bar(s.p.eval) + '</div>'
             + '<div class="hub-summary-note">Rata-rata nilai terbaik: <b>' + (s.avg == null ? '—' : s.avg) + '</b>.<br>Soal ditampilkan satu per satu secara berurutan dengan pilihan A–D. Anda dapat kembali ke soal sebelumnya sebelum mengirim jawaban.</div></div>'
             + '<div class="hub-quiz-grid">' + QUIZZES.map(function (q, i) {
-                var r = store.quiz[q.id], n = quizQuestions(q, 0).length;
+                var r = store.quiz[q.id], n = quizQuestions(q, 0).length, lk = quizLockedBy(q.id);
+                if (lk) {
+                    var lkt = (QUIZZES.find(function (z) { return z.id === lk; }) || {}).title || lk;
+                    return '<div class="hub-quiz-card st-locked' + (q.id === 'final' ? ' final' : '') + '"><div class="hub-mat-top"><span class="hub-mat-num">' + esc(q.modul) + '</span>' + chip(ICON.lock + ' Terkunci', 'muted') + '</div>'
+                        + '<h3>' + esc(q.title) + '</h3><p>Luluskan <b>' + esc(lkt) + '</b> (nilai ≥ ' + KKM + ') terlebih dahulu.</p>'
+                        + '<button class="hub-btn" disabled>' + ICON.lock + ' Terkunci</button></div>';
+                }
                 var st = r ? (r.best >= KKM ? chip(ICON.check + ' Lulus · ' + r.best, 'ok') : chip('Belum lulus · ' + r.best, 'bad')) : chip('Belum dikerjakan', 'muted');
                 return '<div class="hub-quiz-card' + (q.id === 'final' ? ' final' : '') + '"><div class="hub-mat-top"><span class="hub-mat-num">' + esc(q.modul) + '</span>' + st + '</div>'
                     + '<h3>' + esc(q.title) + '</h3><p>' + esc(q.desc) + '</p>'
@@ -883,11 +1015,32 @@
     var QS = null;
     function startQuizPage(id) {
         var qz = QUIZZES.find(function (q) { return q.id === id; }) || QUIZZES[0];
+        var qb = quizLockedBy(qz.id);
+        if (qb) { var qbt = (QUIZZES.find(function (z) { return z.id === qb; }) || {}).title || qb; return renderLockedScreen($('hub-quiz'), crumb([{ label: 'Evaluasi', go: 'evaluasi' }, { label: qz.title }]), qz.title, 'Luluskan <b>' + esc(qbt) + '</b> (nilai ≥ ' + KKM + ') terlebih dahulu.', 'kuis', qb, 'Buka ' + qbt); }
         var rec = store.quiz[qz.id];
         if (!QS || QS.id !== qz.id || QS.finished) {
-            QS = { id: qz.id, qz: qz, qs: quizQuestions(qz, rec ? rec.attempts : 0), ans: [], cur: 0, start: now(), finished: false };
+            QS = { id: qz.id, qz: qz, qs: quizQuestions(qz, rec ? rec.attempts : 0), ans: [], cur: 0, start: now(), finished: false, mode: 'local', sid: null, startP: null };
+            var be = officialBackend();
+            if (be) {
+                var mine = QS;
+                mine.mode = 'pending';
+                mine.startP = be.start(qz.id).then(function (r) {
+                    if (QS !== mine) return;
+                    if (r && r.ok && r.data && r.data.sessionId) { mine.mode = 'server'; mine.sid = r.data.sessionId; mine.be = be; mine.start = now(); }
+                    else if (r && r.error && r.error.code === 'QUIZ_LOCKED') { QS = null; toast(ICON.lock + ' ' + (r.error.message || 'Kuis terkunci: lulus kuis sebelumnya dulu.'), 'warn'); go('evaluasi'); return; }
+                    else { mine.mode = 'local'; mine.why = (r && r.offline) ? 'offline' : 'ditolak'; }
+                    if (!mine.finished) renderQuiz();
+                }, function () { if (QS === mine) { mine.mode = 'local'; mine.why = 'offline'; renderQuiz(); } });
+            }
         }
         renderQuiz();
+    }
+    function modeBanner() {
+        if (!QS) return '';
+        if (QS.mode === 'server') return '<div class="hub-note ok">Kuis resmi: nilai dihitung server dan menjadi dasar nilai rapor.</div>';
+        if (QS.mode === 'pending') return '<div class="hub-note">Menghubungkan ke server…</div>';
+        if (officialBackend() || QS.why) return '<div class="hub-note warn">Mode latihan: server tidak terjangkau, nilai ini <b>tidak</b> tercatat resmi. Periksa koneksi lalu buka kuis lagi.</div>';
+        return '';
     }
     function renderQuiz() {
         var el = $('hub-quiz');
@@ -897,7 +1050,7 @@
         el.innerHTML = crumb([{ label: 'Evaluasi', go: 'evaluasi' }, { label: QS.qz.title }])
             + '<div class="hub-quiz-shell"><header class="hub-quiz-head"><div><div class="hub-kicker">' + esc(QS.qz.modul) + '</div><h1>' + esc(QS.qz.title) + '</h1></div>'
             + '<div class="hub-quiz-count"><b>Soal ' + (QS.cur + 1) + '</b> dari ' + n + '<small>' + answered + ' terjawab</small></div></header>'
-            + bar(pct(QS.cur + 1, n), 'thin')
+            + bar(pct(QS.cur + 1, n), 'thin') + modeBanner()
             + '<section class="hub-question"><div class="hub-qnum">' + (QS.cur + 1) + '</div><p class="hub-qtext">' + esc(q.q) + '</p>'
             + '<div class="hub-opts big">' + q.o.map(function (o, i) {
                 return '<button type="button" class="hub-opt' + (QS.ans[QS.cur] === i ? ' chosen' : '') + '" onclick="StarterHub.qAnswer(' + i + ')"><b>' + letter(i) + '</b><span>' + esc(o) + '</span></button>';
@@ -921,18 +1074,56 @@
         if (QS && !QS.finished && QS.ans.some(function (a) { return a != null; }) && !confirm('Keluar dari kuis? Jawaban yang belum dikirim akan hilang.')) return;
         QS = null; go('evaluasi');
     }
-    function qFinish() {
-        var empty = QS.qs.length - QS.ans.filter(function (a) { return a != null; }).length;
-        if (empty && !confirm('Masih ada ' + empty + ' soal belum dijawab. Kirim sekarang?')) return;
-        var benar = QS.qs.filter(function (q, i) { return QS.ans[i] === q.a; }).length;
-        var nilai = Math.round(benar / QS.qs.length * 100);
-        QS.finished = true; QS.benar = benar; QS.nilai = nilai; QS.dur = Math.round((now() - QS.start) / 1000);
+    function applyResult(benar, nilai, dur, best, attempts) {
+        QS.finished = true; QS.benar = benar; QS.nilai = nilai; QS.dur = dur;
         var r = store.quiz[QS.id] || (store.quiz[QS.id] = { best: 0, attempts: 0 });
-        r.attempts++; r.last = nilai; r.best = Math.max(r.best || 0, nilai); r.t = now();
-        logAct('kuis', QS.qz.title + ': nilai ' + nilai + (nilai >= KKM ? ' (lulus)' : ' (belum lulus)'));
+        if (best != null) { r.attempts = attempts; r.best = best; } else { r.attempts++; r.best = Math.max(r.best || 0, nilai); }
+        r.last = nilai; r.t = now();
+        if (QS.mode === 'server') r.official = true;
+        logAct('kuis', QS.qz.title + ': nilai ' + nilai + (nilai >= KKM ? ' (lulus)' : ' (belum lulus)') + (QS.mode === 'server' ? ' [resmi]' : ' [latihan]'));
         save();
         renderQuizResult();
         try { window.scrollTo(0, 0); } catch (e) { /* noop */ }
+    }
+    function qFinish() {
+        if (QS.sending) return;
+        var empty = QS.qs.length - QS.ans.filter(function (a) { return a != null; }).length;
+        if (empty && !confirm('Masih ada ' + empty + ' soal belum dijawab. Kirim sekarang?')) return;
+        if (QS.mode === 'pending' && QS.startP) {
+            QS.sending = true;
+            var mine = QS;
+            QS.startP.then(function () { mine.sending = false; if (QS === mine && !mine.finished) finishNow(); });
+            return;
+        }
+        finishNow();
+    }
+    function finishNow() {
+        if (QS.mode !== 'server') {
+            if (QS.qs.length && QS.qs[0].a == null) {   /* berkas publik tanpa kunci: penilaian hanya di server */
+                toast('Kuis dinilai oleh server. Hubungkan ke server (cek koneksi/login siswa), lalu buka kuis lagi.', 'warn');
+                return;
+            }
+            var benar = QS.qs.filter(function (q, i) { return QS.ans[i] === q.a; }).length;
+            return applyResult(benar, Math.round(benar / QS.qs.length * 100), Math.round((now() - QS.start) / 1000));
+        }
+        var mine = QS, answers = {};
+        QS.qs.forEach(function (q, i) { answers[q.qid] = QS.ans[i] == null ? null : QS.ans[i]; });
+        QS.sending = true;
+        QS.be.submit(QS.sid, answers).then(function (r) {
+            mine.sending = false;
+            if (QS !== mine) return;
+            if (r && r.ok && r.data) {
+                var d = r.data;
+                mine.review = {};
+                (d.review || []).forEach(function (x) { mine.review[x.qid] = x; });
+                return applyResult(d.correct, d.score, d.durationSec != null ? d.durationSec : Math.round((now() - mine.start) / 1000), d.best, d.attempts);
+            }
+            var code = r && r.error && r.error.code;
+            if (code === 'SESSION_EXPIRED' || code === 'SESSION_NOT_FOUND' || code === 'ALREADY_SUBMITTED') {
+                QS = null; toast('Sesi kuis berakhir (waktu habis). Mulai kuis lagi.', 'warn'); go('evaluasi');
+            } else if (code === 'TOO_FAST') toast('Pengiriman terlalu cepat. Baca soal dengan teliti, lalu kirim lagi.', 'warn');
+            else toast(r && r.offline ? 'Tidak dapat terhubung ke server. Jawaban Anda aman di halaman ini; coba kirim lagi.' : 'Jawaban ditolak server (' + (code || 'error') + ').', 'warn');
+        }, function () { mine.sending = false; toast('Tidak dapat terhubung ke server. Coba kirim lagi.', 'warn'); });
     }
     function renderQuizResult() {
         var el = $('hub-quiz'), lulus = QS.nilai >= KKM;
@@ -941,15 +1132,18 @@
         el.innerHTML = crumb([{ label: 'Evaluasi', go: 'evaluasi' }, { label: QS.qz.title }, { label: 'Hasil' }])
             + '<section class="hub-result ' + (lulus ? 'ok' : 'warn') + ' big"><div class="hub-result-score"><span>' + QS.nilai + '</span><small>' + (lulus ? 'LULUS' : 'REMEDIAL') + '</small></div><div class="hub-result-body">'
             + '<h3>' + (lulus ? 'Selamat, Anda lulus ' : 'Belum mencapai KKM ') + esc(QS.qz.title) + '</h3>'
+            + (QS.mode === 'server' ? '<p class="hub-muted">Nilai resmi tercatat di server.</p>' : '<p class="hub-muted"><b>Mode latihan</b> — nilai ini tidak tercatat resmi.</p>')
             + '<div class="hub-breakdown"><div><span>Jawaban benar</span><b>' + QS.benar + ' / ' + QS.qs.length + '</b></div><div><span>KKM</span><b>' + KKM + '</b></div><div><span>Waktu</span><b>' + mm + 'm ' + ss + 'd</b></div><div><span>Nilai terbaik</span><b>' + store.quiz[QS.id].best + '</b></div></div>'
             + '<div class="hub-try-row"><button class="hub-btn primary-outline" onclick="StarterHub.qRetry()">Ulangi kuis</button>'
-            + (next ? '<button class="hub-btn primary" onclick="StarterHub.go(\'kuis\',\'' + next.id + '\')">' + esc(next.title.split('—')[0]) + ' ' + ICON.next + '</button>' : '')
+            + (next ? (quizLockedBy(next.id) ? lockBtn(esc(next.title.split('—')[0]), 'primary') : '<button class="hub-btn primary" onclick="StarterHub.go(\'kuis\',\'' + next.id + '\')">' + esc(next.title.split('—')[0]) + ' ' + ICON.next + '</button>') : '')
             + '<button class="hub-btn ghost" onclick="StarterHub.go(\'evaluasi\')">Daftar kuis</button></div></div></section>'
             + '<h2 class="hub-h2">Pembahasan</h2><div class="hub-review">' + QS.qs.map(function (q, i) {
-                var a = QS.ans[i], ok = a === q.a;
+                var rv = QS.review && QS.review[q.qid];
+                var key = rv ? rv.key : q.a, expl = rv ? rv.explanation : q.e;
+                var a = QS.ans[i], ok = a === key;
                 return '<div class="hub-rev ' + (ok ? 'ok' : 'bad') + '"><div class="hub-rev-head"><b>' + (i + 1) + '.</b> ' + esc(q.q) + chip(ok ? 'Benar' : (a == null ? 'Tidak dijawab' : 'Salah'), ok ? 'ok' : 'bad') + '</div>'
-                    + '<ol class="hub-rev-opts">' + q.o.map(function (o, k) { return '<li class="' + (k === q.a ? 'right' : (k === a ? 'wrong' : '')) + '"><b>' + letter(k) + '.</b> ' + esc(o) + '</li>'; }).join('') + '</ol>'
-                    + '<p class="hub-muted">' + ICON.bulb + ' ' + esc(q.e) + '</p></div>';
+                    + '<ol class="hub-rev-opts">' + q.o.map(function (o, k) { return '<li class="' + (k === key ? 'right' : (k === a ? 'wrong' : '')) + '"><b>' + letter(k) + '.</b> ' + esc(o) + '</li>'; }).join('') + '</ol>'
+                    + '<p class="hub-muted">' + ICON.bulb + ' ' + esc(expl) + '</p></div>';
             }).join('') + '</div>';
     }
     function qRetry() { var id = QS.id; QS = null; startQuizPage(id); }
@@ -998,13 +1192,14 @@
             }).join('') + '</div></section>';
         html += '<section class="hub-box"><h3>Materi</h3><div class="hub-tile-grid">' + MATERI.map(function (m) {
             var st = matStatus(m.id), r = store.materi[m.id];
-            return '<a class="hub-tile st-' + st + '" href="#/materi-baca/' + m.id + '" title="' + esc(m.title) + '"><b>' + pad2(m.id) + '</b><span>' + esc(m.title) + '</span><small>' + (st === 'paham' ? 'Paham · ' + fmtDate(r.pahamAt).split(' ').slice(0, 3).join(' ') : st === 'dibuka' ? 'Sedang dipelajari' : 'Belum dibaca') + '</small></a>';
+            if (lockedBy(m.id)) return '<span class="hub-tile st-locked" title="Terkunci"><b>' + pad2(m.id) + '</b><span>' + esc(m.title) + '</span><small>' + ICON.lock + ' Terkunci</small></span>';
+            return '<a class="hub-tile st-' + st + '" href="#/materi-baca/' + m.id + '" title=""' + esc(m.title) + '"><b>' + pad2(m.id) + '</b><span>' + esc(m.title) + '</span><small>' + (st === 'paham' ? 'Paham · ' + fmtDate(r.pahamAt).split(' ').slice(0, 3).join(' ') : st === 'dibuka' ? 'Sedang dipelajari' : 'Belum dibaca') + '</small></a>';
         }).join('') + '</div></section>';
         html += '<div class="hub-two"><section class="hub-box"><h3>Praktik & job sheet</h3><div class="hub-table-wrap"><table class="hub-table compact"><thead><tr><th>Kode</th><th>Job sheet</th><th>Status</th><th>Nilai</th></tr></thead><tbody>'
-            + JOBS.map(function (j) { var r = store.js[j.id], st = jsStatus(j.id); return '<tr><td><a href="#/jobsheet-detail/' + j.id + '">' + j.id + '</a></td><td>' + esc(j.title) + '</td><td>' + (st === 'selesai' ? chip('Selesai', 'ok') : st === 'proses' ? chip('Proses', 'warn') : chip('Belum', 'muted')) + '</td><td>' + (r && r.selesai ? '<b>' + r.nilai + '</b>' : '—') + '</td></tr>'; }).join('')
+            + JOBS.map(function (j) { var r = store.js[j.id], st = jsStatus(j.id); return '<tr><td>' + (jsLockedBy(j.id) ? ICON.lock + ' ' + j.id : '<a href="#/jobsheet-detail/' + j.id + '">' + j.id + '</a>') + '</td><td>' + esc(j.title) + '</td><td>' + (st === 'selesai' ? chip('Selesai', 'ok') : st === 'proses' ? chip('Proses', 'warn') : chip('Belum', 'muted')) + '</td><td>' + (r && r.selesai ? '<b>' + r.nilai + '</b>' : '—') + '</td></tr>'; }).join('')
             + '</tbody></table></div></section>'
             + '<section class="hub-box"><h3>Studi kasus diagnosis</h3><div class="hub-table-wrap"><table class="hub-table compact"><thead><tr><th>Kode</th><th>Kasus</th><th>Status</th><th>Skor</th></tr></thead><tbody>'
-            + CASES.map(function (c) { var r = store.diag[c.id]; return '<tr><td><a href="#/diagnosis-kasus/' + c.id + '">' + c.id + '</a></td><td>' + esc(c.judul) + '</td><td>' + (r && r.selesai ? chip('Selesai', 'ok') : r && r.tests && r.tests.length ? chip('Proses', 'warn') : chip('Belum', 'muted')) + '</td><td>' + (r && r.selesai ? '<b>' + r.skor + '</b>' : '—') + '</td></tr>'; }).join('')
+            + CASES.map(function (c) { var r = store.diag[c.id]; return '<tr><td>' + (caseLockedBy(c.id) ? ICON.lock + ' ' + c.id : '<a href="#/diagnosis-kasus/' + c.id + '">' + c.id + '</a>') + '</td><td>' + esc(c.judul) + '</td><td>' + (r && r.selesai ? chip('Selesai', 'ok') : r && r.tests && r.tests.length ? chip('Proses', 'warn') : chip('Belum', 'muted')) + '</td><td>' + (r && r.selesai ? '<b>' + r.skor + '</b>' : '—') + '</td></tr>'; }).join('')
             + '</tbody></table></div></section></div>';
         html += '<div class="hub-two"><section class="hub-box"><h3>Evaluasi</h3><div class="hub-table-wrap"><table class="hub-table compact"><thead><tr><th>Kuis</th><th>Terbaik</th><th>Terakhir</th><th>Percobaan</th><th>Status</th></tr></thead><tbody>'
             + QUIZZES.map(function (q) { var r = store.quiz[q.id]; return '<tr><td><a href="#/kuis/' + q.id + '">' + esc(q.title) + '</a></td><td>' + (r ? '<b>' + r.best + '</b>' : '—') + '</td><td>' + (r ? r.last : '—') + '</td><td>' + (r ? r.attempts : 0) + '</td><td>' + (r ? (r.best >= KKM ? chip('Lulus', 'ok') : chip('Remedial', 'bad')) : chip('Belum', 'muted')) + '</td></tr>'; }).join('')
@@ -1118,7 +1313,7 @@
     }
     function recommend() {
         var nextM = MATERI.find(function (m) { return matStatus(m.id) !== 'paham'; });
-        var nextJ = JOBS.find(function (j) { var r = store.js[j.id]; return !(r && r.selesai); });
+        var nextJ = JOBS.find(function (j) { return j.id === jsOrder().find(function (x) { return !jsDone(x); }); });
         var nextD = CASES.find(function (c) { var r = store.diag[c.id]; return !(r && r.selesai); });
         var nextQ = QUIZZES.find(function (q) { var r = store.quiz[q.id]; return !(r && r.best >= KKM); });
         if (!store.visited['3d']) return { label: 'Jelajahi komponen di 3D Lab', run: function () { go('3d'); } };
@@ -1221,6 +1416,7 @@
     }
 
     window.StarterHub = {
+        lockedNotice: lockedNotice,
         go: go, route: route, summary: summary, dims: dims, startNext: startNext, getStore: function () { return store; },
         answerCheck: answerCheck, togglePaham: togglePaham, nextMateri: nextMateri, materiAction: materiAction,
         jsStep: jsStep, jsField: jsField, jsAnswer: jsAnswer, jsCrit: jsCrit, jsSaveDraft: jsSaveDraft, jsSubmit: jsSubmit, jsFromMeter: jsFromMeter, printJob: printJob, openSimulator: openSimulator,

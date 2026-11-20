@@ -379,10 +379,37 @@
             var n = norm(res);
             if (!res.ok || n.ok === false || !Array.isArray(n.rows)) return false;
             var any = false;
-            n.rows.forEach(function (r) { try { if (ctx.stashWrite(r.username, r.data)) any = true; } catch (e) { } });
-            if (any) { try { ctx.onRemoteChange(); } catch (e) { } }
-            return any;
+            /* Nilai kuis RESMI (dihitung server) menggantikan nilai kuis di blob progres siswa, yang bisa diubah dari browser. */
+            return http('sl_quiz_results_org', { p_token: token() }).then(function (rr) {
+                var nr = norm(rr), off = {}, hasOff = rr.ok && nr.ok !== false && Array.isArray(nr.rows);
+                if (hasOff) nr.rows.forEach(function (x) {
+                    var u = String(x.username || '').toLowerCase(); if (!u) return;
+                    var q = (off[u] = off[u] || {})[x.quizId] = (off[u][x.quizId] || { best: 0, attempts: 0 });
+                    q.attempts++; q.best = Math.max(q.best, x.score); q.last = x.score; q.official = true;
+                });
+                var seen = {};
+                n.rows.forEach(function (r) {
+                    try {
+                        var d = r.data || {}, u = String(r.username || '').toLowerCase(); seen[u] = true;
+                        if (hasOff) d = overlayOfficial(d, off[u] || {});
+                        if (ctx.stashWrite(r.username, d)) any = true;
+                    } catch (e) { }
+                });
+                if (hasOff) Object.keys(off).forEach(function (u) {
+                    if (seen[u]) return;
+                    try { if (ctx.stashWrite(u, overlayOfficial({}, off[u]))) any = true; } catch (e) { }
+                });
+                if (any) { try { ctx.onRemoteChange(); } catch (e) { } }
+                return any;
+            });
         });
+    }
+    function overlayOfficial(blob, quizzes) {
+        var out = Object.assign({}, blob), h = {};
+        try { h = JSON.parse(out.starterHub_v1 || '{}') || {}; } catch (e) { h = {}; }
+        h.quiz = quizzes;   /* hanya hasil resmi yang dihitung */
+        out.starterHub_v1 = JSON.stringify(h);
+        return out;
     }
 
     /* ---------------- siklus hidup ---------------- */
@@ -435,6 +462,9 @@
         push: push,
         schedulePush: schedulePush,
         pullOrgProgress: pullOrgProgress,
+        /* Kuis resmi dinilai server */
+        quizStart: function (quizId) { return http('sl_quiz_start', { p_token: token(), p_quiz: quizId }).then(norm); },
+        quizSubmit: function (sessionId, answers) { return http('sl_quiz_submit', { p_token: token(), p_session: sessionId, p_answers: answers }).then(norm); },
         notePlain: function (salt, pw) { if (ON && salt && pw) plain[salt] = pw; },
         resetLocal: resetLocal,
 
